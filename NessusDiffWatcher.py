@@ -84,8 +84,8 @@ def get_info_scan(id_scan: str) -> dict:
     try:
         response = requests.get(url, headers=headers, verify=False)
         response.raise_for_status()
-        with open(f"response_scan_{id_scan}.json", "w") as file:
-            json.dump(response.json(), file, indent=8)
+        # with open(f"response_scan_{id_scan}.json", "w") as file:
+        #     json.dump(response.json(), file, indent=8)
 
     except requests.exceptions.RequestException as e:
         sys.stderr.write(f"\033[mError receiving scans: {e}.\033[0m\n")
@@ -95,12 +95,56 @@ def get_info_scan(id_scan: str) -> dict:
     return response.json()
 
 
+def parse_vulnerabilities(scan_vul: dict) -> (dict, dict):
+    severity_names = {
+        0: 'Info',
+        1: 'Low',
+        2: 'Medium',
+        3: 'High',
+        4: 'Critical'
+    }
+    severity_counts = {name: 0 for name in severity_names.values()}
+
+    scan_vulnerabilities = {}
+    for vul in scan_vul:
+        severity_name = severity_names.get(vul['count'], 'Unknown')
+        if severity_name in severity_counts:
+            severity_counts[severity_name] += 1
+        else:
+            severity_counts[severity_name] = 1
+        if vul['severity'] > 0:
+            scan_vulnerabilities[vul['plugin_name']] = {
+                'count': vul['count'],
+                'severity': vul['severity']
+            }
+    return severity_counts, scan_vulnerabilities
+
+
+def parse_diff_vulnerabilities(scan_vul: dict) -> dict:
+    pass
+
+
 if __name__ == '__main__':
     bash, message_temp, access_key, secret_key, names_scans = get_config()
 
     scans = get_scans()
-    get_info_scan('42')
     for scan in scans:
         if scan['name'] in names_scans:
-            get_info_scan(scan['id'])
+            info_scan = get_info_scan(scan['id'])
+
+            if info_scan['info']['status'] != 'completed':
+                print(f"Now this \"{scan['name']}\": {info_scan['info']['status']}")
+                continue
+            else:
+                print('completed')
+
+            if not os.path.exists(f"response_scan_{scan['id']}.json"):
+                with open(f"response_scan_{scan['id']}.json", "w") as file:
+                    json.dump(info_scan, file, indent=8)
+                total_count, vulnerabilities = parse_vulnerabilities(info_scan['vulnerabilities'])
+                print(json.dumps(total_count, indent=4))
+                print(json.dumps(vulnerabilities, indent=4))
+            else:
+                vulnerabilities_new = parse_diff_vulnerabilities(info_scan['vulnerabilities'])
+
             print(scan['name'], ' ', scan['id'])
