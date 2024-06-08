@@ -65,6 +65,7 @@ def get_scans() -> dict:
 
     try:
         response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
         sys.stderr.write(f"\033[mError receiving scans: {e}.\033[0m\n")
@@ -74,10 +75,32 @@ def get_scans() -> dict:
     return response.json()['scans']
 
 
+def get_info_scan(id_scan: str) -> dict:
+    headers = {
+        'X-ApiKeys': f'accessKey={access_key}; secretKey={secret_key}',
+    }
+    url = f'https://localhost:8834/scans/{id_scan}'
+
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()
+        with open(f"response_scan_{id_scan}.json", "w") as file:
+            json.dump(response.json(), file, indent=8)
+
+    except requests.exceptions.RequestException as e:
+        sys.stderr.write(f"\033[mError receiving scans: {e}.\033[0m\n")
+        sys.stderr.flush()
+        exit(1)
+
+    return response.json()
+
+
 if __name__ == '__main__':
     bash, message_temp, access_key, secret_key, names_scans = get_config()
 
     scans = get_scans()
+    get_info_scan('42')
     for scan in scans:
         if scan['name'] in names_scans:
-            print(json.dumps(scan, indent=4))
+            get_info_scan(scan['id'])
+            print(scan['name'], ' ', scan['id'])
