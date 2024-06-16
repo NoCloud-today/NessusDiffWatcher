@@ -277,7 +277,7 @@ if __name__ == '__main__':
                 for key, value in total_names.items():
                     combined_line = f"\t{key}: {len(value)}"
                     if value:
-                        combined_line += '\n\t' + '; '.join(map(str, value))
+                        combined_line += '\n\t- ' + '\n\t- '.join(map(str, value))
                     combined_output += combined_line + "\n"
                 message_to = f'Scan *{scan["name"]}* ({time_})\nThis is the first scan\nVulnerabilities:\n{combined_output}'
 
@@ -291,12 +291,12 @@ if __name__ == '__main__':
                     for key, value in total_names_new.items():
                         combined_line = f"\t{key}: {len(value)}"
                         if value:
-                            combined_line += '\n\t' + '; '.join(map(str, value))
+                            combined_line += '\n\t- ' + '\n\t- '.join(map(str, value))
                         combined_output_new += combined_line + "\n"
                     for key, value in total_names_closed.items():
                         combined_line = f"\t{key}: {len(value)}"
                         if value:
-                            combined_line += '\n\t' + '; '.join(map(str, value))
+                            combined_line += '\n\t- ' + '\n\t- '.join(map(str, value))
                         combined_output_closed += combined_line + "\n"
 
                     message_to = (f'Scan *{scan["name"]}* ({time_})\nNew vulnerabilities:\n{combined_output_new}\n'
