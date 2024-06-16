@@ -98,15 +98,14 @@ def get_info_scan(id_scan: str) -> dict:
     return response.json()
 
 
-def count_total(scan_count) -> dict:
-    severity_names = {
-        0: 'Info',
-        1: 'Low',
-        2: 'Medium',
-        3: 'High',
-        4: 'Critical'
+def count_total_dict(scan_count: dict):
+    severity_plugs = {
+        'Info': [],
+        'Low': [],
+        'Medium': [],
+        'High': [],
+        'Critical': []
     }
-    severity_counts = {name: 0 for name in severity_names.values()}
 
     if isinstance(scan_count, dict):
         items = scan_count.values()
@@ -116,13 +115,18 @@ def count_total(scan_count) -> dict:
         raise ValueError("Input should be a list or a dictionary")
 
     for vuln in items:
-        severity_name = severity_names.get(vuln['severity'], 'Unknown')
-        if severity_name in severity_counts:
-            severity_counts[severity_name] += vuln['count']
-        # else:
-        #     severity_counts[severity_name] = 1
+        severity_name = {
+            0: 'Info',
+            1: 'Low',
+            2: 'Medium',
+            3: 'High',
+            4: 'Critical'
+        }.get(vuln.get('severity', 'Unknown'))
 
-    return severity_counts
+        if severity_name in severity_plugs:
+            severity_plugs[severity_name].append(vuln.get('plugin_name'))
+
+    return severity_plugs
 
 
 def parse_one_scan(scan_vuln: dict) -> dict:
@@ -136,32 +140,65 @@ def parse_one_scan(scan_vuln: dict) -> dict:
     return scan_vulnerabilities
 
 
-def parse_two_scans(scan_vuln: dict, object_id: str) -> dict | str:
+def count_total_list(scan_count: list[dict]):
+    severity_plugs = {
+        'Info': [],
+        'Low': [],
+        'Medium': [],
+        'High': [],
+        'Critical': []
+    }
+
+    for vuln in scan_count:
+        for key, value in vuln.items():
+            severity_name = {
+                0: 'Info',
+                1: 'Low',
+                2: 'Medium',
+                3: 'High',
+                4: 'Critical'
+            }.get(value.get('severity', 'Unknown'))
+
+            if severity_name in severity_plugs:
+                severity_plugs[severity_name].append(key)
+
+    return severity_plugs
+
+
+def parse_two_scans(scan_vuln_new: dict, object_id: str) -> (dict, dict):
     with open(f"{directory_path}/scan_{object_id}.json", 'r') as file_prev:
         scan_vul_prev = json.load(file_prev)
 
-    if int(scan_vul_prev['info']['scanner_end']) == int(scan_vuln['info']['scanner_end']):
-        return "There is no new report"
+    if int(scan_vul_prev['info']['scanner_end']) == int(scan_vuln_new['info']['scanner_end']):
+        return "There is no new report", ''
 
-    if scan_vul_prev['vulnerabilities'] == scan_vuln['vulnerabilities']:
-        return "No differences with the previous"
+    if scan_vul_prev['vulnerabilities'] == scan_vuln_new['vulnerabilities']:
+        return "No differences with the previous", ''
 
     prev_dict = parse_one_scan(scan_vul_prev['vulnerabilities'])
-    new_dict = parse_one_scan(scan_vuln['vulnerabilities'])
+    new_dict = parse_one_scan(scan_vuln_new['vulnerabilities'])
 
+    keys_closed = []
+    keys_new_open = []
     keys_remove = []
 
     for key, value in new_dict.items():
         if key in prev_dict:
-            if value['count'] <= prev_dict[key]['count']:
-                keys_remove.append(key)
-            else:
-                value['count'] = value['count'] - prev_dict[key]['count']
+            if value['count'] < prev_dict[key]['count']:
+                keys_closed.append({key: prev_dict[key]['count'] - value['count']})
+            elif value['count'] > prev_dict[key]['count']:
+                keys_new_open.append({key: value['count'] - prev_dict[key]['count']})
+            keys_remove.append(key)
+        else:
+            keys_new_open.append({key: new_dict[key]})
 
     for key in keys_remove:
-        del new_dict[key]
+        del prev_dict[key]
 
-    return count_total(new_dict)
+    for key, value in prev_dict.items():
+        keys_closed.append({key: value})
+
+    return count_total_list(keys_new_open), count_total_list(keys_closed)
 
 
 def update_template(message_template_up: str, message_send, curr_time: str) -> str:
@@ -235,17 +272,35 @@ if __name__ == '__main__':
 
             time_ = datetime.fromtimestamp(info_scan['info']['scanner_end']).strftime("%Y-%m-%d %H:%M:%S")
             if not os.path.exists(f"{directory_path}/scan_{scan['id']}.json"):
-                total_count = count_total(info_scan['vulnerabilities'])
-                count_format = '\n'.join(f"\t{key}: {value}" for key, value in total_count.items())
-                message_to = f'Scan *{scan["name"]}* ({time_})\nThis is first scan\nVulnerabilities:\n{count_format}'
+                total_names = count_total_dict(info_scan['vulnerabilities'])
+                combined_output = ""
+                for key, value in total_names.items():
+                    combined_line = f"\t{key}: {len(value)}"
+                    if value:
+                        combined_line += '\n\t' + '; '.join(map(str, value))
+                    combined_output += combined_line + "\n"
+                message_to = f'Scan *{scan["name"]}* ({time_})\nThis is first scan\nVulnerabilities:\n{combined_output}'
 
             else:
-                vulnerabilities = parse_two_scans(info_scan, scan['id'])
-                if isinstance(vulnerabilities, str):
-                    message_to = f'Scan *{scan["name"]}* ({time_})\n{vulnerabilities}'
+                total_names_new, total_names_closed = parse_two_scans(info_scan, scan['id'])
+                if isinstance(total_names_new, str):
+                    message_to = f'Scan *{scan["name"]}* ({time_})\n{total_names_new}'
                 else:
-                    vulnerabilities_format = '\n'.join(f"\t{key}: {value}" for key, value in vulnerabilities.items())
-                    message_to = f'Scan *{scan["name"]}* ({time_})\nNew vulnerabilities:\n{vulnerabilities_format}'
+                    combined_output_new = ""
+                    combined_output_closed = ""
+                    for key, value in total_names_new.items():
+                        combined_line = f"\t{key}: {len(value)}"
+                        if value:
+                            combined_line += '\n\t' + '; '.join(map(str, value))
+                        combined_output_new += combined_line + "\n"
+                    for key, value in total_names_closed.items():
+                        combined_line = f"\t{key}: {len(value)}"
+                        if value:
+                            combined_line += '\n\t' + '; '.join(map(str, value))
+                        combined_output_closed += combined_line + "\n"
+
+                    message_to = (f'Scan *{scan["name"]}* ({time_})\nNew vulnerabilities:\n{combined_output_new}\n'
+                                  f'Closed:\n{combined_output_closed}')
 
             send_message(bash_cmd, message_to, scan['name'])
             with open(f"{directory_path}/scan_{scan['id']}.json", "w") as file:
