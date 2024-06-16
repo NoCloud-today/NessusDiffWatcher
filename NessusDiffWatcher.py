@@ -279,7 +279,7 @@ if __name__ == '__main__':
                     if value:
                         combined_line += '\n\t' + '; '.join(map(str, value))
                     combined_output += combined_line + "\n"
-                message_to = f'Scan *{scan["name"]}* ({time_})\nThis is first scan\nVulnerabilities:\n{combined_output}'
+                message_to = f'Scan *{scan["name"]}* ({time_})\nThis is the first scan\nVulnerabilities:\n{combined_output}'
 
             else:
                 total_names_new, total_names_closed = parse_two_scans(info_scan, scan['id'])
@@ -300,7 +300,7 @@ if __name__ == '__main__':
                         combined_output_closed += combined_line + "\n"
 
                     message_to = (f'Scan *{scan["name"]}* ({time_})\nNew vulnerabilities:\n{combined_output_new}\n'
-                                  f'Closed:\n{combined_output_closed}')
+                                  f'Closed vulnerabilities:\n{combined_output_closed}')
 
             send_message(bash_cmd, message_to, scan['name'])
             with open(f"{directory_path}/scan_{scan['id']}.json", "w") as file:
