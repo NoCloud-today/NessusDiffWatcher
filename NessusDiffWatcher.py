@@ -33,6 +33,7 @@ def get_config() -> tuple:
         bash_command_conf = config["NOTIFICATION"]["NOTIFICATION_CMD"]
         access_key_conf = config['NESSUS']['ACCESS_KEY']
         secret_key_conf = config['NESSUS']['SECRET_KEY']
+        domain_conf = config['NESSUS']['DOMAIN']
 
         check_config_variable(bash_command_conf, "NOTIFICATION_CMD")
         check_config_variable(access_key_conf, "ACCESS_KEY")
@@ -50,15 +51,16 @@ def get_config() -> tuple:
         bash_command_conf,
         access_key_conf,
         secret_key_conf,
+        domain_conf,
         filtered_scan_names
     )
 
 
-def get_scans() -> dict:
+def get_scans(domain_scan: str) -> dict:
     headers = {
         'X-ApiKeys': f'accessKey={access_key}; secretKey={secret_key}',
     }
-    url = 'https://localhost:8834/scans'
+    url = f'https://{domain_scan}/scans'
 
     try:
         response = requests.get(url, headers=headers, verify=False)
@@ -76,11 +78,11 @@ def get_scans() -> dict:
     return response.json()['scans']
 
 
-def get_info_scan(id_scan: str) -> dict:
+def get_info_scan(domain_scan: str, id_scan: str) -> dict:
     headers = {
         'X-ApiKeys': f'accessKey={access_key}; secretKey={secret_key}',
     }
-    url = f'https://localhost:8834/scans/{id_scan}'
+    url = f'https://{domain_scan}/scans/{id_scan}'
 
     try:
         response = requests.get(url, headers=headers, verify=False)
@@ -254,15 +256,15 @@ if __name__ == '__main__':
     sys.stdout.write(f"Time: {current_time}\n")
     sys.stdout.flush()
 
-    bash_cmd, access_key, secret_key, names_scans = get_config()
+    bash_cmd, access_key, secret_key, domain, names_scans = get_config()
 
     directory_path = './reports'
     os.makedirs(directory_path, exist_ok=True)
 
-    scans = get_scans()
+    scans = get_scans(domain)
     for scan in scans:
         if scan['name'] in names_scans:
-            info_scan = get_info_scan(scan['id'])
+            info_scan = get_info_scan(domain, scan['id'])
 
             if info_scan['info']['status'] != 'completed':
                 time_ = datetime.fromtimestamp(info_scan['info']['scanner_start']).strftime("%Y-%m-%d %H:%M:%S")
